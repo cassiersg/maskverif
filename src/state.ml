@@ -150,6 +150,10 @@ type state = {
 
 
 let init_state nb_shares params =
+    (*
+    Format.printf "### nb_shares=%i\n" nb_shares;
+    Format.printf "### params=%s\n" (String.concat " " (List.map (fun v -> Format.sprintf "%s(id=%i, ty=%s)" v.v_name v.v_id (ty2string v.v_ty)) params));
+    *)
 
   let s_count = Count.init () in
 
@@ -182,6 +186,7 @@ let clear_state state =
   Stack.clear state.s_todo;
   Vector.clear state.s_top;
   Stack.clear state.s_bij
+
 
 let get_top state =
   let ns = Vector.to_list state.s_top in
@@ -222,6 +227,10 @@ let rm_used_share state p =
   Pinfo.decr (Hv.find state.s_params p)
 
 let declare_share state p n =
+    (*
+    Format.printf "### params: %s\n" (String.concat " " (List.map (fun (x, y) -> Format.asprintf "%a" pp_var x) (state.s_params |> Hv.to_seq |> List.of_seq)));
+    Format.printf "### var: %s\n" (Format.asprintf "%a" pp_var p);
+    *)
   Pinfo.declare (Hv.find state.s_params p) n
 
 let declare_random state n =
@@ -296,35 +305,38 @@ let rec add_expr state e =
 let init_todo state =
   Stack.iter (fun n ->
       if Vector.size n.children = 1 then Stack.push state.s_todo n)
-             state.s_randoms
+    state.s_randoms
 
 (* ----------------------------------------------------------------------- *)
 
 let rec remove_child state p c =
-  Vector.remove (N.equal c) p.children;
-  match Vector.size p.children with
-  | 0 -> remove_node state p
-  | 1 when is_rnd p -> Stack.push state.s_todo p
-  | _ -> ()
+    if Vector.exists (N.equal c) p.children then begin
+        Vector.remove (N.equal c) p.children;
+        match Vector.size p.children with
+        | 0 -> remove_node state p
+        | 1 when is_rnd p -> Stack.push state.s_todo p
+        | _ -> ()
+    end
 
 and remove_node state n =
-  assert (Vector.size n.children = 0);
-  match n.descriptor with
-  | Top   -> assert false
-  | Rnd _ -> ()
-  | Share(a,_,_) -> rm_used_share state a
-  | Pub _ -> ()
-  | Const _ -> ()
-  | Op1(_,p) -> remove_child state p n
-  | Op2(_,p1,p2) ->
+assert (Vector.size n.children = 0);
+match n.descriptor with
+| Top   -> assert false
+| Rnd _ -> ()
+| Share(a,_,_) -> rm_used_share state a
+| Pub _ -> ()
+| Const _ -> ()
+| Op1(_,p) -> remove_child state p n
+| Op2(_,p1,p2) ->
     remove_child state p1 n;
     remove_child state p2 n
-  | Tuple(_, _o, ps) ->
-    for i = 0 to Array.length ps - 1 do
-      remove_child state ps.(i) n
-    done
+| Tuple(_, _o, ps) ->
+for i = 0 to Array.length ps - 1 do
+    remove_child state ps.(i) n
+done
 
 let remove_other_parent state p c =
+
   match c.descriptor with
   | Op1 _ -> ()
   | Op2(_,p1, p2) ->
@@ -346,7 +358,7 @@ let apply_bij state r =
   (* c become a random so push it on s_random *)
   Stack.push state.s_randoms c;
   Stack.push state.s_bij (r,c);
-  if (is_rnd_for_bij c) then Stack.push state.s_todo c
+  if (is_rnd_for_bij c) then Stack.push state.s_todo c;
 
 exception Simplify1Done
 
@@ -517,3 +529,8 @@ let replay_bij1 state (e1, e2) =
 
 let replay_bij state bij =
   Stack.iter (replay_bij1 state) bij
+
+
+let n_bij state = Stack.length state.s_bij
+
+let used_param state v = (Hv.find state.s_params v).Pinfo.nb_used_shares <> 0

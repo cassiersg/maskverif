@@ -99,6 +99,10 @@ end
 
 (* ----------------------------------------------------------------------- *)
 
+let o_mul2 = Op.make "mul2" (Some ([w1], w1)) true Other
+let o_mul3 = Op.make "mul3" (Some ([w1], w1)) true Other
+let o_square = Op.make "square" (Some ([w1], w1)) true Other
+
 let mk_add t s = Op.make s (Some ([t;t], t)) true  Add
 let mk_mul t s = Op.make s (Some ([t;t], t)) false Mul
 let mk_neg t s = Op.make s (Some ([t],t))    true  Neg 
@@ -284,7 +288,11 @@ module Me = Map.Make(E)
 let top       = E.mk_expr Etop
 let rnd r     = E.mk_expr (Ernd r)
 let pub x     = E.mk_expr (Epub x)
-let share p i v = E.mk_expr (Eshare(p,i,v))
+let share p i v =
+    (*
+    Format.printf "### share p=%a i=%i v=%a\n" pp_var p i pp_var v;
+    *)
+    E.mk_expr (Eshare(p,i,v))
 
 let econst c = E.mk_expr (Econst c)
 let ezero ty = econst (C.make ty Z.zero)
@@ -303,6 +311,10 @@ let emul ty e1 e2 = op2 (o_mul ty) e1 e2
 let neg e = op1 o_negb e
 let add e1 e2 = op2 o_addb e1 e2
 let mul e1 e2 = op2 o_mulb e1 e2
+
+let mul2 e = op1 o_mul2 e
+let mul3 e = op1 o_mul3 e
+let square e = op1 o_square e
 
 let unsafe_op b o es = E.mk_expr (Eop(b,o,es))
 

@@ -17,6 +17,7 @@ val clear_state : state -> unit
 (* ----------------------------------------------------------------------- *)
 
 val add_top_expr : state -> expr -> node
+val add_expr : state -> expr -> node
 
 (* ----------------------------------------------------------------------- *)
 
@@ -49,6 +50,7 @@ val clear_bijection : state -> unit
 
 val used_share : state -> node -> bool
 
+val n_bij: state -> int
 
 
 val simplify_until_with_clear : state -> (node -> bool) -> int -> unit
@@ -61,3 +63,5 @@ val simplify_until_with_clear2 :
 (* ----------------------------------------------------------------------- *)
 
 val is_top_expr : state -> expr -> bool
+
+val used_param: state -> var -> bool

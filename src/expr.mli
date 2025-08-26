@@ -64,6 +64,10 @@ val o_negw16 : operator
 val o_negw32 : operator
 val o_negw64 : operator
 
+val o_mul2: operator
+val o_mul3: operator
+val o_square: operator
+
 val _DFF_P_     : operator
 val _DFF_PP0_   : operator
 val _DFFSR_PPP_ : operator
@@ -141,6 +145,9 @@ val mul   : expr -> expr -> expr
 val op    : operator -> expr array -> expr
 val tuple : expr array -> expr
 
+val mul2: expr -> expr
+val mul3: expr -> expr
+val square: expr -> expr
 
 val is_op_tuple : operator -> bool
 val is_rnd      : expr -> bool

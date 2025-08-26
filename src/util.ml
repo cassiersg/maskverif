@@ -158,6 +158,8 @@ module Stack = struct
       st_buff = Array.init s.st_top (fun i -> f s.st_buff.(i));
     }
 
+    let length s = s.st_top
+
 end
 
 (* -------------------------------------------------------------------- *)
@@ -441,3 +443,8 @@ type tool_opt = {
     pp_error  : bool;
     checkbool : bool;
   }
+
+let time f x =
+    let t = Sys.time() in
+    let fx = f x in
+    (Sys.time() -. t, fx)

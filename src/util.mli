@@ -56,6 +56,7 @@ module Stack :
     val to_list : 'a t -> 'a list
     val iter : ('a -> unit) -> 'a t -> unit
     val map : ('a -> 'b) -> 'a t -> 'b t
+    val length : 'a t -> int
   end
 
 (* ----------------------------------------------------------------------- *)
@@ -169,3 +170,5 @@ type tool_opt = {
     pp_error  : bool;
     checkbool : bool;
   }
+
+val time: ('a -> 'b) -> 'a -> float * 'b

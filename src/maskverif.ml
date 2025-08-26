@@ -164,6 +164,7 @@ and process_file filename =
   let cs = Parse.process_file (data filename) in
   List.iter process_command cs
 
+(*
 let main =
   while true do
     try
@@ -185,3 +186,199 @@ let main =
     | Util.Error e ->
       Format.eprintf "%a@." Util.pp_error e
   done
+*)
+open Expr
+open State
+(*
+let main =
+    let word = w1 in
+    let a = V.mk_var "a" word in
+    let av = V.mk_var "av" word in
+    let b = V.mk_var "b" word in
+    let bv = V.mk_var "bv" word in
+    let a0v = V.mk_var "a0" word in
+    let a1v = V.mk_var "a1" word in
+    let b0v = V.mk_var "b0" word in
+    let b1v = V.mk_var "b1" word in
+    (*
+    let a0 = share a 0 a0v in
+    let a1 = share a 1 a1v in
+    let b0 = share b 0 b0v in
+    let b1 = share b 1 b1v in
+    *)
+    let ae = share a 0 av in
+    let be = share b 0 bv in
+    let a0 = rnd a0v in
+    let b0 = rnd b0v in
+    let a1 = add ae a0 in
+    let b1 = add be b0 in
+
+    let rv = V.mk_var "r" word in
+    let r = rnd rv in
+    (* let o0 = add (mul a0 b0) (add r (mul a0 b1)) in *)
+    (* let o0 = add r (mul a0 b1) in *)
+    let o0 = add r a0 in
+    (* let t = add r (mul a1 b0) in *)
+    let params = [a; b] in
+    (* let params = [a0v; a1v; b0v; b1v; rv] in *)
+    let state = init_state 1 params in (* nb_shares=1 for "probing", 2 for NI *)
+    let n0 = add_top_expr state o0 in
+    init_todo state; (* initalize the list of randoms used only once *)
+    (* let simplified = simplify state in *)
+    let simplified = simplify_until state 0 in (* maybe more efficient than simplify ? *)
+    Format.printf "simplified res: %s\n" (if simplified then "true" else "false");
+    let simpl_o0 = simplified_expr state o0 in
+    Format.printf "base: %a\n" pp_expr o0;
+    Format.printf "simplified: %a\n" pp_expr simpl_o0
+    *)
+
+
+let rec process_lines process_line =
+  try
+    let line = read_line () in
+    process_line line;
+    process_lines process_line
+  with End_of_file -> ()
+
+let read_circuit line =
+    (* Format.printf "circuit: %s\n" line; *)
+    let open Yojson.Basic.Util in
+    let json = Yojson.Basic.from_string line in
+    let gates = json |> member "gates" |> to_list in
+    let word = w1 in
+    let build_gate gate_map gate =
+        (* Format.printf "Building gate %s\n" (Yojson.Basic.pretty_to_string gate); *)
+        let name = gate |> member "name" |> to_string in
+        let kind = gate |> member "kind" |> to_string in
+        if kind = "random" then
+            let v = V.mk_var name word in
+            (name, rnd v, None)
+        else if kind = "constant" then
+            (*
+            let value = gate |> member "value" |> to_int in
+            (name, econst (C.make word (Z.of_int value)), None)
+            *)
+            let v = V.mk_var name word in
+            (name, pub v, None)
+        else if kind = "secret" then
+            let v_secret = V.mk_var name word in
+            let v_sh = V.mk_var ("vsh:" ^ name) word in
+            (name, share v_secret 0 v_sh, Some v_secret)
+        else begin
+            assert (kind = "operation");
+            let operation = gate |> member "operation" |> to_string in
+            let operands =
+                gate |> member "operands" |> to_list |> List.map to_string
+                |> List.map (Hashtbl.find gate_map) in
+            let unary_ops = [("neg", neg); ("mul2", mul2); ("mul3", mul3); ("square", square)] in 
+            let e = if List.mem_assoc operation unary_ops then begin
+                assert (List.length operands = 1);
+                (List.assoc operation unary_ops) (List.hd operands)
+            end else begin
+                assert (List.length operands > 0);
+                let op =
+                    if operation = "add" then
+                        add
+                    else if operation = "mul" then
+                        mul
+                    else begin
+                        Format.printf "invalid operation: %s\n%!" operation;
+                        assert false (* Invalid operation *)
+                    end
+                in
+                List.fold_left op (List.hd operands) (List.tl operands)
+            end
+            in
+            (name, e, None)
+        end
+    in
+    let gate_map = Hashtbl.create (List.length gates) in
+    let new_gate gate =
+        let name, e, param = build_gate gate_map gate in
+        Hashtbl.add gate_map name e;
+        (e, param)
+    in
+    Format.printf "start creating expr@.";
+    let (expr_time, expr_params) = time (List.map new_gate) gates in
+    Format.printf "done creating expr@.";
+    let gates_e = List.map fst expr_params in
+    let params = List.filter_map snd expr_params in
+    let state = init_state 1 params in
+    let get_secret_node (e, param) = match param with
+    | Some param -> Some (param.v_name, add_expr state e)
+    | None -> None
+    in
+    let secret_nodes = List.filter_map get_secret_node expr_params in
+    let get_secret_param (e, param) = match param with
+    | Some param -> Some (param.v_name, param)
+    | None -> None
+    in
+    let secret_params = List.filter_map get_secret_param expr_params in
+    let res_json =
+        let open Yojson.Basic in
+        to_string (`Assoc [
+            ("done", `Bool true);
+            ("expr_time", `Float expr_time);
+        ])
+    in
+    Format.printf "MVRES: %s\n%!" res_json;
+    state, gate_map, secret_nodes, secret_params
+
+let str_of_bool b = if b then "true" else "false"
+
+
+let check_tuple state gate_map secret_nodes secret_params line =
+    let check tuple =
+        (* Format.printf "Clearing state\n."; *)
+        clear_state state;
+        Format.printf "add_top_expr\n%!";
+        (* add_top_expr seems to be a bottleneck *)
+        let (time_top, n0) = time (add_top_expr state) tuple in
+        (* let used_sec (name, node) = if used_share state node then Some name else None in *)
+        let used_sec (name, node) = 
+            if used_param state node then Some name else None in
+        let pre_used_secrets = List.filter_map used_sec secret_params in
+        Format.printf "init_todo\n%!";
+        init_todo state;
+        Format.printf "simplify_until\n%!";
+        (* let simpl_res = simplify state in *)
+        let (time_simplify, simpl_res) = time (simplify_until state) 0 in
+        Format.printf "simplify_expr\n%!";
+        (* let simpl_expr = simplified_expr state probed_tuple in *)
+        (* Format.printf "Tuple: %s\n" line; *)
+        (* Format.printf "  Simplify res: %s\n" (str_of_bool simpl_res); *)
+        (* Format.printf "  Simplified: %a\n" pp_expr simpl_expr; *)
+        (* Format.printf "  Secret nodes: %s\n" (String.concat ", " (List.map fst secret_nodes)); *)
+        (* Format.eprintf "post-simplify %a@." pp_state state; *)
+        Format.printf "used_secrets\n%!";
+        let used_sec2 (name, node) = if used_share state node then Some name else None in
+        let used_secrets = List.filter_map used_sec secret_params in
+        (used_secrets, time_top, time_simplify, pre_used_secrets)
+    in
+    let open Yojson.Basic.Util in
+    let json = Yojson.Basic.from_string line in
+    let probes = json |> member "probes" |> to_list in
+    let probes_e = List.map (fun p -> p |> to_string |> Hashtbl.find gate_map) probes in
+    let probed_tuple = tuple (Array.of_list probes_e) in
+    let (exec_t, (used_secrets, time_top, time_simplify, preu)) = time check probed_tuple in
+    (* Format.printf "  Used secrets: %s\n" (String.concat ", " used_secrets); *)
+    let res_json =
+        let open Yojson.Basic in
+        let res = `Assoc [
+            ("result", `Bool (List.length used_secrets = 0));
+            ("used_secrets", `List (List.map (fun s -> `String s) used_secrets));
+            ("pre_used_secrets", `List (List.map (fun s -> `String s) preu));
+            ("exec_time", `Float exec_t);
+            ("add_top_time", `Float time_top);
+            ("simplify_time", `Float time_simplify);
+            ("n_bij", `Int (n_bij state))
+        ] in
+        to_string res
+    in
+    Format.printf "MVRES: %s\n%!" res_json;
+    ()
+
+let main =
+    let state, gate_map, secret_nodes, secret_params = read_circuit (read_line ()) in
+    process_lines (check_tuple state gate_map secret_nodes secret_params)
+

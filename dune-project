@@ -10,4 +10,5 @@
   (depends
     menhir
     ocamlgraph
+    yojson
     zarith))
