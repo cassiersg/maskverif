@@ -101,6 +101,9 @@ end
 
 let o_mul2 = Op.make "mul2" (Some ([w1], w1)) true Other
 let o_mul3 = Op.make "mul3" (Some ([w1], w1)) true Other
+let o_mulc = Op.make "mulc" (Some ([w1], w1)) true Other
+let o_affaes = Op.make "affaes" (Some ([w1], w1)) true Other
+let o_addpub = Op.make "addpub" (Some ([w1], w1)) true Other
 let o_square = Op.make "square" (Some ([w1], w1)) true Other
 
 let mk_add t s = Op.make s (Some ([t;t], t)) true  Add
@@ -314,6 +317,9 @@ let mul e1 e2 = op2 o_mulb e1 e2
 
 let mul2 e = op1 o_mul2 e
 let mul3 e = op1 o_mul3 e
+let mulc e = op1 o_mulc e
+let affaes e = op1 o_affaes e
+let addpub e = op1 o_addpub e
 let square e = op1 o_square e
 
 let unsafe_op b o es = E.mk_expr (Eop(b,o,es))

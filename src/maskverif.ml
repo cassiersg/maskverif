@@ -270,7 +270,7 @@ let read_circuit line =
             let operands =
                 gate |> member "operands" |> to_list |> List.map to_string
                 |> List.map (Hashtbl.find gate_map) in
-            let unary_ops = [("neg", neg); ("mul2", mul2); ("mul3", mul3); ("square", square)] in 
+            let unary_ops = [("neg", neg); ("mul2", mul2); ("mul3", mul3); ("mulc", mulc); ("affine", affaes); ("addpub", addpub); ("square", square)] in 
             let e = if List.mem_assoc operation unary_ops then begin
                 assert (List.length operands = 1);
                 (List.assoc operation unary_ops) (List.hd operands)
